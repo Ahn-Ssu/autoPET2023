@@ -19,7 +19,7 @@ class Unet_baseline():  # SegmentationAlgorithm is not inherited in this class a
         self.input_path = '/input/'  # according to the specified grand-challenge interfaces
         self.output_path = '/output/images/automated-petct-lesion-segmentation/'  # according to the specified grand-challenge interfaces
         self.nii_path = '/opt/algorithm/'  # where to store the nii files
-        self.ckpt_path = '/opt/algorithm/last.ckpt'
+        self.ckpt_path = '/opt/algorithm/DiWA3.ckpt'
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)
         
@@ -99,7 +99,7 @@ class Unet_baseline():  # SegmentationAlgorithm is not inherited in this class a
             
             mask_out = sliding_window_inference(
                                     inputs=image,
-                                    roi_size=(160, 160, 160),
+                                    roi_size=(128, 128, 128),
                                     sw_batch_size=2,
                                     predictor=self.net.model,
                                     overlap=0.5,

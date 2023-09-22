@@ -36,8 +36,8 @@ class Net(pytorch_lightning.LightningModule):
         
         self.all_key = ['ct','pet']
         self.transform = Compose([
-            LoadImaged(keys=self.all_key, ensure_channel_first=True),
-            EnsureTyped(keys=self.all_key, track_meta=False),
+            LoadImaged(keys=self.all_key, ensure_channel_first=True, image_only=True),
+            EnsureTyped(keys=self.all_key, track_meta=False), # [26 26  0] [373 373 326] torch.Size([1, 1, 400, 400, 326])
             Orientationd(keys=self.all_key, axcodes='RAS'),
             ScaleIntensityRanged(keys='ct',
                                     a_min=-1000, a_max=1000,
@@ -70,13 +70,13 @@ class Net(pytorch_lightning.LightningModule):
         return val_loader
     
     def load_weights(self, ckpt_path):
-        from collections import OrderedDict
-        ckpt = torch.load(ckpt_path, map_location='cpu')['state_dict']
-        new_state_dict = OrderedDict()
-        for n, v in ckpt.items():
-            name = n.replace("model.","") 
-            new_state_dict[name] = v
-        self.model.load_state_dict(new_state_dict)
+        # from collections import OrderedDict
+        ckpt = torch.load(ckpt_path, map_location='cpu')
+        # new_state_dict = OrderedDict()
+        # for n, v in ckpt.items():
+        #     name = n.replace("model.","")
+        #     new_state_dict[name] = v
+        self.model.load_state_dict(ckpt)
 
 
 def segment_PETCT(ckpt_path, data_dir, export_dir):
@@ -101,6 +101,7 @@ def segment_PETCT(ckpt_path, data_dir, export_dir):
             box_start, box_end = cropper.compute_bounding_box(img=pet)
             w_start, h_start, d_start = box_start
             w_end, h_end, d_end = box_end
+            # print(box_start, box_end, val_data['pet'].shape)
             zeros = np.zeros((H,W,D), dtype=np.uint8)
             
             # inference 
@@ -111,8 +112,8 @@ def segment_PETCT(ckpt_path, data_dir, export_dir):
             
             mask_out = sliding_window_inference(
                                     inputs=image,
-                                    roi_size=(160, 160, 160),
-                                    sw_batch_size=2,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
                                     predictor=net.model,
                                     overlap=0.5,
                                     mode='constant')
@@ -138,7 +139,7 @@ def segment_PETCT(ckpt_path, data_dir, export_dir):
             print("done writing")
 
 
-def run_inference(ckpt_path='/opt/algorithm/last.ckpt', data_dir='/opt/algorithm/', export_dir='/output/'):
+def run_inference(ckpt_path='/opt/algorithm/DiWA3.ckpt', data_dir='/opt/algorithm/', export_dir='/output/'):
     segment_PETCT(ckpt_path, data_dir, export_dir)
 
 
