@@ -3,7 +3,7 @@ AutoPET 2023 challenge submission repository.
 
 ## How to use
 - Prepare the checkpoints
-  - Download the checkpoints from [Google Drive](https://drive.google.com/drive/folders/1_5yYclCru3PymlCOLcZaardurSTM0y5k?usp=sharing) or [Cloud](https://drive.google.com/drive/folders/1_5yYclCru3PymlCOLcZaardurSTM0y5k?usp=sharing).
+  - Download the checkpoints from [Google Drive](https://drive.google.com/drive/folders/1_5yYclCru3PymlCOLcZaardurSTM0y5k?usp=sharing) or [Cloud](https://nextcloud.cgv.life/s/iMH3nM4i2FtNQsa).
   - unzip `ckpt.zip` file.
   - locate the weight files under the root of this repository.
 - Make the docker container
