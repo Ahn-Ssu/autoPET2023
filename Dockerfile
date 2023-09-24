@@ -22,7 +22,11 @@ RUN rm -rf /opt/algorithm/*
 COPY --chown=algorithm:algorithm requirements.txt /opt/algorithm/
 COPY --chown=algorithm:algorithm inference.py /opt/algorithm/
 COPY --chown=algorithm:algorithm model.py /opt/algorithm/
-COPY --chown=algorithm:algorithm last.ckpt /opt/algorithm/
+COPY --chown=algorithm:algorithm a2.ckpt /opt/algorithm/
+COPY --chown=algorithm:algorithm a3.ckpt /opt/algorithm/
+COPY --chown=algorithm:algorithm c1.ckpt /opt/algorithm/
+COPY --chown=algorithm:algorithm d2.ckpt /opt/algorithm/
+COPY --chown=algorithm:algorithm DiWA3.ckpt /opt/algorithm/
 COPY --chown=algorithm:algorithm process.py /opt/algorithm/
 
 

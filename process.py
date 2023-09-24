@@ -19,7 +19,8 @@ class Unet_baseline():  # SegmentationAlgorithm is not inherited in this class a
         self.input_path = '/input/'  # according to the specified grand-challenge interfaces
         self.output_path = '/output/images/automated-petct-lesion-segmentation/'  # according to the specified grand-challenge interfaces
         self.nii_path = '/opt/algorithm/'  # where to store the nii files
-        self.ckpt_path = '/opt/algorithm/DiWA3.ckpt'
+        self.ckpt_path = ['/opt/algorithm/c1.ckpt','/opt/algorithm/a2.ckpt',
+                          '/opt/algorithm/a3.ckpt','/opt/algorithm/d2.ckpt']
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)
         
@@ -75,7 +76,22 @@ class Unet_baseline():  # SegmentationAlgorithm is not inherited in this class a
         """
         Your algorithm goes here
         """        
-        self.net.load_weights(self.ckpt_path)
+        # self.net.load_weights(self.ckpt_path)
+        state_dict = self.net.load_weights(ckpt_path=ckpt_path[0])
+        self.net.model.load_state_dict(state_dict)
+        self.net.model = self.net.model.half()
+        
+        state_dict = self.net.load_weights(ckpt_path=ckpt_path[1])
+        self.net.model2.load_state_dict(state_dict)
+        self.net.model2 = self.net.model2.half()
+        
+        state_dict = self.net.load_weights(ckpt_path=ckpt_path[2])
+        self.net.model3.load_state_dict(state_dict)
+        self.net.model3 = self.net.model3.half()
+        
+        state_dict = self.net.load_weights(ckpt_path=ckpt_path[3])
+        self.net.model4.load_state_dict(state_dict)
+        self.net.model4 = self.net.model4.half()
         self.net.eval()
         
         device = torch.device('cuda:0')
@@ -95,16 +111,56 @@ class Unet_baseline():  # SegmentationAlgorithm is not inherited in this class a
             ct, pet = inputs['ct'], inputs['pet']
             ct = ct[..., w_start:w_end, h_start:h_end, d_start:d_end]
             pet = pet[..., w_start:w_end, h_start:h_end, d_start:d_end]
+            ct = ct.half()
+            pet = pet.half()
             image = torch.concat([ct,pet],dim=1).to(device) # Bz, C, H, W, D -- dim=1
             
+            # c1
             mask_out = sliding_window_inference(
                                     inputs=image,
-                                    roi_size=(128, 128, 128),
-                                    sw_batch_size=2,
-                                    predictor=self.net.model,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model,
                                     overlap=0.5,
                                     mode='constant')
+            # c1 twice
+            mask_outt = sliding_window_inference(
+                                    inputs=image,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model,
+                                    overlap=0.5,
+                                    mode='constant')
+            mask_out += mask_outt
+            # a2
+            mask_outt = sliding_window_inference(
+                                    inputs=image,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model2,
+                                    overlap=0.5,
+                                    mode='constant')
+            mask_out += mask_outt
+            # a3
+            mask_outt = sliding_window_inference(
+                                    inputs=image,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model3,
+                                    overlap=0.5,
+                                    mode='constant')
+            mask_out += mask_outt
+            # d2
+            mask_outt = sliding_window_inference(
+                                    inputs=image,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model4,
+                                    overlap=0.5,
+                                    mode='constant')
+            mask_out += mask_outt
             
+            mask_out /= 5
             mask_out = torch.nn.functional.softmax(mask_out, dim=1)
             mask_out = torch.argmax(mask_out, dim=1)
             mask_out = torch.where(mask_out > 0.5, 1. , 0)

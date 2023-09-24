@@ -34,6 +34,33 @@ class Net(pytorch_lightning.LightningModule):
                             use_MS=False
                         )
         
+        self.model2 = UNet_middleF(
+                            input_dim=2,
+                            out_dim=2,
+                            hidden_dims=[32,32,64,128,256], # 16 32 32 64 128 is default setting of Monai
+                            spatial_dim=3,
+                            dropout_p=0.,
+                            use_MS=False
+                        )
+        
+        self.model3 = UNet_middleF(
+                            input_dim=2,
+                            out_dim=2,
+                            hidden_dims=[32,32,64,128,256], # 16 32 32 64 128 is default setting of Monai
+                            spatial_dim=3,
+                            dropout_p=0.,
+                            use_MS=False
+                        )
+        
+        self.model4 = UNet_middleF(
+                            input_dim=2,
+                            out_dim=2,
+                            hidden_dims=[32,32,64,128,256], # 16 32 32 64 128 is default setting of Monai
+                            spatial_dim=3,
+                            dropout_p=0.,
+                            use_MS=False
+                        )
+        
         self.all_key = ['ct','pet']
         self.transform = Compose([
             LoadImaged(keys=self.all_key, ensure_channel_first=True, image_only=True),
@@ -41,7 +68,7 @@ class Net(pytorch_lightning.LightningModule):
             Orientationd(keys=self.all_key, axcodes='RAS'),
             ScaleIntensityRanged(keys='ct',
                                     a_min=-1000, a_max=1000,
-                                    b_min=0, b_max=1, clip=True),
+                                    b_min=0, b_max=1, clip=False),
             ScaleIntensityRanged(keys='pet',
                                     a_min=0, a_max=40,
                                     b_min=0, b_max=1, clip=False),
@@ -70,21 +97,37 @@ class Net(pytorch_lightning.LightningModule):
         return val_loader
     
     def load_weights(self, ckpt_path):
-        # from collections import OrderedDict
-        ckpt = torch.load(ckpt_path, map_location='cpu')
-        # new_state_dict = OrderedDict()
-        # for n, v in ckpt.items():
-        #     name = n.replace("model.","")
-        #     new_state_dict[name] = v
-        self.model.load_state_dict(ckpt)
+        from collections import OrderedDict
+        ckpt = torch.load(ckpt_path, map_location='cpu')['state_dict']
+        new_state_dict = OrderedDict()
+        for n, v in ckpt.items():
+            name = n.replace("model.","")
+            new_state_dict[name] = v
+        # self.model.load_state_dict(ckpt)
+        return new_state_dict
 
 
 def segment_PETCT(ckpt_path, data_dir, export_dir):
     print("starting")
 
     net = Net()
-    net.load_weights(ckpt_path=ckpt_path)
+    state_dict = net.load_weights(ckpt_path=ckpt_path[0])
+    net.model.load_state_dict(state_dict)
+    net.model = net.model.half()
+    
+    state_dict = net.load_weights(ckpt_path=ckpt_path[1])
+    net.model2.load_state_dict(state_dict)
+    net.model2 = net.model2.half()
+    
+    state_dict = net.load_weights(ckpt_path=ckpt_path[2])
+    net.model3.load_state_dict(state_dict)
+    net.model3 = net.model3.half()
+    
+    state_dict = net.load_weights(ckpt_path=ckpt_path[3])
+    net.model4.load_state_dict(state_dict)
+    net.model4 = net.model4.half()
     net.eval()
+    
 
     device = torch.device('cuda:0')
     net.to(device)
@@ -101,15 +144,17 @@ def segment_PETCT(ckpt_path, data_dir, export_dir):
             box_start, box_end = cropper.compute_bounding_box(img=pet)
             w_start, h_start, d_start = box_start
             w_end, h_end, d_end = box_end
-            # print(box_start, box_end, val_data['pet'].shape)
             zeros = np.zeros((H,W,D), dtype=np.uint8)
             
             # inference 
             ct, pet = val_data['ct'], val_data['pet']
+            ct = ct.half()
+            pet = pet.half()
             ct = ct[..., w_start:w_end, h_start:h_end, d_start:d_end]
             pet = pet[..., w_start:w_end, h_start:h_end, d_start:d_end]
             image = torch.concat([ct,pet],dim=1).to(device) # Bz, C, H, W, D -- dim=1
             
+            # c1
             mask_out = sliding_window_inference(
                                     inputs=image,
                                     roi_size=(192, 192, 192),
@@ -117,7 +162,44 @@ def segment_PETCT(ckpt_path, data_dir, export_dir):
                                     predictor=net.model,
                                     overlap=0.5,
                                     mode='constant')
+            # c1 twice
+            mask_outt = sliding_window_inference(
+                                    inputs=image,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model,
+                                    overlap=0.5,
+                                    mode='constant')
+            mask_out += mask_outt
+            # a2
+            mask_outt = sliding_window_inference(
+                                    inputs=image,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model2,
+                                    overlap=0.5,
+                                    mode='constant')
+            mask_out += mask_outt
+            # a3
+            mask_outt = sliding_window_inference(
+                                    inputs=image,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model3,
+                                    overlap=0.5,
+                                    mode='constant')
+            mask_out += mask_outt
+            # d2
+            mask_outt = sliding_window_inference(
+                                    inputs=image,
+                                    roi_size=(192, 192, 192),
+                                    sw_batch_size=1,
+                                    predictor=net.model4,
+                                    overlap=0.5,
+                                    mode='constant')
+            mask_out += mask_outt
             
+            mask_out /= 5
             mask_out = torch.nn.functional.softmax(mask_out, dim=1)
             mask_out = torch.argmax(mask_out, dim=1)
             mask_out = torch.where(mask_out > 0.5, 1. , 0)
@@ -139,7 +221,8 @@ def segment_PETCT(ckpt_path, data_dir, export_dir):
             print("done writing")
 
 
-def run_inference(ckpt_path='/opt/algorithm/DiWA3.ckpt', data_dir='/opt/algorithm/', export_dir='/output/'):
+def run_inference(ckpt_path=['/opt/algorithm/c1.ckpt','/opt/algorithm/a2.ckpt',
+                          '/opt/algorithm/a3.ckpt','/opt/algorithm/d2.ckpt'], data_dir='/opt/algorithm/', export_dir='/output/'):
     segment_PETCT(ckpt_path, data_dir, export_dir)
 
 
